@@ -8,8 +8,8 @@ import json
 app = Flask(__name__)
 
 @app.route("/<app_name>", methods=["GET"])
-def retrieve_app_schemas(app_name: str):
-    path = f"{app.config["SCHEMA_DIR"]}/{app_name}.schema.json"
+def retrieve_app_values(app_name: str):
+    path = f"{app.config["SCHEMA_DIR"]}/{app_name}.value.json"
 
     if os.path.exists(path):
         try:
@@ -23,8 +23,8 @@ def retrieve_app_schemas(app_name: str):
     
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--schema-dir", dest="schema_dir", default="data/schemas")
-    parser.add_argument("--listen", default="0.0.0.0:5001")
+    parser.add_argument("--schema-dir", dest="schema_dir", default="data/values")
+    parser.add_argument("--listen", default="0.0.0.0:5002")
     
     args = parser.parse_args()
     host, port = args.listen.split(":")
