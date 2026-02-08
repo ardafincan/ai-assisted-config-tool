@@ -16,3 +16,13 @@ services:
     build:
       dockerfile: Dockerfile
       context: schema-server/
+  ollama_service:
+    image: ollama/ollama:latest #maybe not latest? look for other tags too also change the bigger model to 8b :CHANGE 
+    command: >
+      sh -c "ollama serve &
+             sleep 3 && 
+             ollama pull qwen3:0.6b &&
+             ollama pull qwen3:latest &&  
+             wait" 
+             
+      
