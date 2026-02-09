@@ -1,9 +1,12 @@
-from flask import Flask, make_response, request, jsonify
+from flask import Flask, make_response, request, jsonify, current_app
 from argparse import ArgumentParser
+from jsonschema import validate
 import json
 import requests
 
+# add proper logging :ADD
 app = Flask(__name__)
+app.logger.setLevel("INFO")
 
 
 @app.route("/message", methods=["POST"])
@@ -14,7 +17,7 @@ def response_request():
     app_name = find_app(message)
     new_values = get_updated_values(message, app_name)
 
-    return make_response(jsonify({"value": new_values}), 200)
+    return make_response(jsonify(new_values), 200)
 
 
 def find_app(input_message: str) -> str:
@@ -38,65 +41,80 @@ def find_app(input_message: str) -> str:
     response.encoding = "utf-8"
     result = response.json()
     app_name = result["response"]
+    app_name = app_name.strip()
 
     return app_name
 
 
 def get_updated_values(input_message: str, app_name: str) -> str:
-    schema_response = requests.get(
-        f"http://schema_service:5001/{app_name}"
-    )
+    schema_response = requests.get(f"http://schema_service:5001/{app_name}")
     schema_response = schema_response.json()
 
     values_response = requests.get(f"http://values_service:5002/{app_name}")
     values_response = values_response.json()
+    updated_values = {}
 
     llm_response = requests.post(
         "http://ollama_service:11434/api/generate",
         json={
-            "model": "qwen3:4b",
-            "system": """You are a configuration update assistant. Your task is to process user requests and update a JSON configuration object while maintaining strict schema compliance.
+            "model": "llama3.1:8b",
+            "system": """You are a configuration update assistant that ACTIVELY MODIFIES configuration values based on user requests.
 
-                        ## Core Responsibilities
+                ## Your Task
 
-                        1. **Parse user requests**: Understand configuration change requests from natural language input
-                        2. **Update values**: Modify the current configuration JSON based on the request
-                        3. **Maintain schema compliance**: Ensure all updates conform to the provided JSON schema structure
-                        4. **Preserve existing data**: Only modify fields mentioned in the request; keep all other fields unchanged
+                1. **READ** the input message to understand what changes are requested
+                2. **APPLY** those changes to the current values JSON
+                3. **RETURN** the updated JSON (not the original)
 
-                        ## Input Format
+                ## Critical Rules
 
-                        You will receive:
-                        - **Input message**: User's natural language request for configuration changes
-                        - **Current values**: The existing configuration as a JSON object
+                **YOU MUST MODIFY THE VALUES** - Do not return unchanged values unless the request is invalid or unclear.
 
-                        ## Output Format
+                ### JSON Formatting (STRICTLY REQUIRED)
 
-                        Return ONLY a valid JSON object with the updated configuration. Do not include:
-                        - Explanatory text
-                        - Markdown code blocks
-                        - Comments or annotations
+                1. Use double quotes (") for all strings and keys - NEVER single quotes (')
+                2. Use JSON literals: `true`, `false`, `null` - NEVER `True`, `False`, `None`
+                3. Return the object directly - Do NOT wrap in "values" key
+                4. Output ONLY valid JSON - no markdown, no explanations
 
-                        ## Validation Rules
+                ## Input Format
 
-                        - All required fields from the schema must be present
-                        - Field types must match schema definitions (string, number, boolean, array, object)
-                        - Respect schema constraints (min/max values, enum options, patterns)
-                        - Maintain nested object structures
-                        - Preserve array structures unless explicitly asked to modify
+                You will receive:
+                - **Input message**: What to change
+                - **Current values**: Starting configuration JSON
 
-                        ## Error Handling
+                ## Processing Steps
 
-                        If a request cannot be processed:
-                        - Return the current values unchanged
-                        - You may add an "_error" field with a brief explanation (if schema allows)
+                1. Identify which fields need to change from the input message
+                2. Apply the requested changes to those fields
+                3. Keep all other fields from current values unchanged
+                4. Ensure the result matches the schema
+                5. Output the complete updated JSON
 
-                        ## Example
+                ## Examples
 
-                        Input message: "Set timeout to 30 and enable debug mode"
-                        Current values: `{"timeout": 10, "debug": false, "api_key": "xyz"}`
+                **Example 1:**
+                Input message: "Set timeout to 30"
+                Current values: `{"timeout": 10, "debug": false, "api_key": "xyz"}`
+                Output: `{"timeout": 30, "debug": false, "api_key": "xyz"}`
 
-                        Output: `{"timeout": 30, "debug": true, "api_key": "xyz"}`
+                **Example 2:**
+                Input message: "Enable debug mode and change api_key to abc123"
+                Current values: `{"timeout": 10, "debug": false, "api_key": "xyz"}`
+                Output: `{"timeout": 10, "debug": true, "api_key": "abc123"}`
+
+                **Example 3:**
+                Input message: "Set retries to 5 and add endpoint as https://api.example.com"
+                Current values: `{"retries": 3, "timeout": 30}`
+                Schema allows "endpoint" field
+                Output: `{"retries": 5, "timeout": 30, "endpoint": "https://api.example.com"}`
+
+                ## Important
+
+                - **ALWAYS apply the requested changes** unless they violate the schema
+                - **NEVER return unchanged values** when a valid change is requested
+                - **PRESERVE all fields** not mentioned in the input message
+                - **OUTPUT ONLY THE JSON** with no additional text`
             """,
             "format": schema_response,
             "prompt": f"""Input message: \"{input_message}\"
@@ -106,14 +124,18 @@ def get_updated_values(input_message: str, app_name: str) -> str:
     )
     llm_response.encoding = "utf-8"
     llm_response = llm_response.json()
-    updated_values = llm_response["response"]
+    result = llm_response["response"]
+    current_app.logger.warning("onemli")
+    current_app.logger.info(llm_response)
+    current_app.logger.info(f"result came") #change and add proper logging here :CHANGE
 
-    return updated_values
+    return result
 
-if __name__ == "__main__": 
+
+if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--listen", default="0.0.0.0:5003")
-    
+
     args = parser.parse_args()
     host, port = args.listen.split(":")
 

@@ -3,26 +3,63 @@ services:
     build:
       dockerfile: Dockerfile
       context: bot-server/
+    ports:
+      - "5008:5003"
     depends_on:
       values_service:
         condition: service_healthy
       schema_service:
         condition: service_healthy
+      ollama_service:
+        condition: service_healthy
   values_service:
     build:
       dockerfile: Dockerfile
       context: values-server/
+    volumes:
+      - ./data/values:/data/values
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
   schema_service:
     build:
       dockerfile: Dockerfile
       context: schema-server/
+    volumes:
+      - ./data/schemas:/data/schemas
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
   ollama_service:
-    image: ollama/ollama:latest #maybe not latest? look for other tags too also change the bigger model to 8b :CHANGE 
+    image: ollama/ollama:latest
+    volumes:
+      - models:/.ollama/models
+    entrypoint: ["/bin/sh", "-c"]
     command: >
-      sh -c "ollama serve &
-             sleep 3 && 
-             ollama pull qwen3:0.6b &&
-             ollama pull qwen3:latest &&  
-             wait" 
-             
-      
+      "ollama serve &
+      sleep 5 &&
+      ollama pull qwen3:0.6b &&
+      ollama pull llama3.1:8b &&
+      wait"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+volumes:
+  models:
+    driver: local

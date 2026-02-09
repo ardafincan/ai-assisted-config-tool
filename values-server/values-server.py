@@ -1,25 +1,31 @@
-from flask import Flask, make_response
+from flask import Flask, make_response, jsonify
 from argparse import ArgumentParser
 import os.path
 import json
 
-# ADD PROPER LOGGING :ADD
-# ADD UNIT TESTS :ADD
 app = Flask(__name__)
+app.logger.setLevel("INFO")
+
+@app.route('/health')
+def health():
+    return make_response('OK', 200)
 
 @app.route("/<app_name>", methods=["GET"])
 def retrieve_app_values(app_name: str):
-    path = f"{app.config["SCHEMA_DIR"]}/{app_name}.value.json"
+    path = f"{app.config['SCHEMA_DIR']}/{app_name}.value.json"
 
     if os.path.exists(path):
         try:
             with open(path, "r") as f:
-                schema = json.load(f)
-            return make_response(schema, 200)
-        except Exception:
-            return make_response("Internal Server Error", 500)
+                values = json.load(f)
+            app.logger.info(f"Serving values: {app_name}")
+            return make_response(jsonify(values), 200)
+        except Exception as e:
+            app.logger.error(f"Error loading {app_name}: {str(e)}", exc_info=True)
+            return make_response(jsonify({"response": "Internal Server Error"}), 500)
     else:
-        return make_response("No such file", 404)
+        app.logger.warning(f"Values not found: {app_name}")
+        return make_response(jsonify({"response": "No such file"}), 404)
     
 if __name__ == "__main__":
     parser = ArgumentParser()
