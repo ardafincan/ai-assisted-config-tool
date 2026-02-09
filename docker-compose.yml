@@ -4,7 +4,7 @@ services:
       dockerfile: Dockerfile
       context: bot-server/
     ports:
-      - "5008:5003"
+      - "5003:5003"
     depends_on:
       values_service:
         condition: service_healthy
@@ -12,6 +12,7 @@ services:
         condition: service_healthy
       ollama_service:
         condition: service_healthy
+    restart: always
   values_service:
     build:
       dockerfile: Dockerfile
@@ -24,6 +25,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    restart: always
   schema_service:
     build:
       dockerfile: Dockerfile
@@ -36,6 +38,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    restart: always
   ollama_service:
     image: ollama/ollama:latest
     volumes:
@@ -47,19 +50,21 @@ services:
       ollama pull qwen3:0.6b &&
       ollama pull llama3.1:8b &&
       wait"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # UN-COMMENT FOR PERFORMANCE OPTIMIZATION IF THERE IS NVIDIA GPU ON THE HOST
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: ["CMD-SHELL", "ollama list | grep -q 'qwen3:0.6b' && ollama list | grep -q 'llama3.1:8b'"]
       interval: 30s
       timeout: 10s
-      retries: 10
+      retries: 20
       start_period: 120s
+    restart: always
 volumes:
   models:
     driver: local
