@@ -57,4 +57,6 @@ Since LLM inference is mainly composed of large number of matrix operations, usi
 
 #### Docker & Deployment
 The healthchecks may be the part that gave me the most trouble. After struggling a while I have managed to fix everything. But there was a problem, the healthcheck for ollama-service was sending `ollama list` requests to service and it works at the first moment ollama gets served. So user was able to send requests to bot-service but this is not a desired state, I had to show bot-service as healthy after both models was pulled completely. So I found a way, I started listing existing models and checking if both models are in the output. So bot-service only sees the ollama-service as healthy after both necessary models are pulled. This means user can send requests right after bot-service is healthy. 
- 
+
+### Notes
+You can go to the GitHub repository using the link at header. 
